@@ -1,0 +1,9 @@
+[Unit]
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/gq-gmc -dev /dev/ttyUSB0
+Restart=always
+
+[Install]
+WantedBy = multi-user.target
