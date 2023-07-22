@@ -62,9 +62,10 @@ func main() {
 		fmt.Fprintf(port, "<HEARTBEAT0>>")
 	}()
 
-	counts := make(chan uint16, 128)
+	// countChan is used to transmit the event counts. It uses a pointer to distinguish between 0 and a closed channel.
+	countChan := make(chan *uint16, 128)
 	go func() {
-		defer close(counts)
+		defer close(countChan)
 		for {
 			var buf [2]byte
 			n, err := port.Read(buf[:])
@@ -83,7 +84,7 @@ func main() {
 
 			val := binary.BigEndian.Uint16(buf[:])
 			val &= heartbeatMask
-			counts <- val
+			countChan <- &val
 		}
 	}()
 
@@ -94,8 +95,12 @@ func main() {
 		case sig := <-sigChan:
 			log.Printf("Received %s, shutting down", sig)
 			return
-		case count := <-counts:
-			cpm += int(count)
+		case count := <-countChan:
+			if count == nil {
+				log.Print("countChan is closed, exiting")
+				return
+			}
+			cpm += int(*count)
 		case <-timer:
 			doseRate := float64(cpm) * 0.00625
 			log.Printf("cpm=%d, doseRate=%f", cpm, doseRate)
