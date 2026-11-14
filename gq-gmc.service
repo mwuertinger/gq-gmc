@@ -1,9 +1,76 @@
+# Systemd unit for gq-gmc on hal. Install to /etc/systemd/system/.
+#
+# Runs as a transient, unprivileged user (DynamicUser=) without any
+# capabilities. The only privilege it needs is the serial port of the Geiger
+# counter: it gets the dialout group and the device cgroup allows nothing but
+# USB serial ports. It only talks to InfluxDB on loopback. Check with:
+#   systemd-analyze security gq-gmc.service
+
 [Unit]
-After=network.target
+Description=GQ GMC Geiger counter to InfluxDB
+Documentation=https://github.com/mwuertinger/gq-gmc
+After=docker.service
 
 [Service]
-ExecStart=/usr/local/bin/gq-gmc -dev /dev/ttyUSB0
+Type=exec
+# The by-id path stays stable even if more USB serial adapters are plugged in.
+ExecStart=/usr/local/bin/gq-gmc -dev /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0 -influxAddr http://[::1]:8086 -logRawCommunication
 Restart=always
+RestartSec=10s
+
+# Identity: random UID/GID allocated at start, plus the dialout group that owns
+# /dev/ttyUSB*. No PrivateUsers=: inside a user namespace the dialout group is
+# unmapped, and access to the device would depend on how the kernel treats
+# unmapped supplementary groups.
+DynamicUser=yes
+SupplementaryGroups=dialout
+UMask=0077
+
+# No privileges at all.
+CapabilityBoundingSet=
+AmbientCapabilities=
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+
+# File system: everything read-only, no home directories, private /tmp, and
+# nothing but the binary itself may be executed. The binary must be statically
+# linked (CGO_ENABLED=0) for that. PrivateDevices= would hide the serial port,
+# so the device cgroup restricts device access instead: only USB serial ports.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+DevicePolicy=closed
+DeviceAllow=char-ttyUSB rw
+ProtectProc=invisible
+ProcSubset=pid
+NoExecPaths=/
+ExecPaths=/usr/local/bin/gq-gmc
+MemoryDenyWriteExecute=yes
+
+# Kernel attack surface.
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+PrivateIPC=yes
+RemoveIPC=yes
+KeyringMode=private
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+
+# Network: InfluxDB on loopback only.
+RestrictAddressFamilies=AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+TasksMax=32
 
 [Install]
-WantedBy = multi-user.target
+WantedBy=multi-user.target
