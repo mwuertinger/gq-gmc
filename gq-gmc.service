@@ -50,8 +50,9 @@ ProcSubset=pid
 NoExecPaths=/
 ExecPaths=/usr/local/bin/gq-gmc
 MemoryDenyWriteExecute=yes
-# /dev/shm stays the host's (shared, writable) even with PrivateDevices=; not needed.
-InaccessiblePaths=/dev/shm
+# The host's /dev/shm and /dev/mqueue (shared memory, POSIX message queues) are
+# writable by anyone; not needed.
+InaccessiblePaths=/dev/shm /dev/mqueue
 
 # Kernel attack surface.
 ProtectKernelTunables=yes
