@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/binary"
 	"flag"
 	"fmt"
@@ -65,20 +66,17 @@ func main() {
 	// countChan is used to transmit the event counts. It uses a pointer to distinguish between 0 and a closed channel.
 	countChan := make(chan *uint16, 128)
 	go func() {
+		r := bufio.NewReader(port)
 		defer close(countChan)
 		for {
 			var buf [2]byte
-			n, err := port.Read(buf[:])
+			_, err := io.ReadFull(r, buf[:])
 			if err == io.EOF {
 				log.Printf("Read: EOF")
 				return
 			}
 			if err != nil {
 				fmt.Printf("Read error: %v\n", err)
-				continue
-			}
-			// After ReadTimeout Read returns with n == 0
-			if n == 0 {
 				continue
 			}
 
